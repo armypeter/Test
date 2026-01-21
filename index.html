@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Punk Stickman</title>
+    <style>
+        /* CSS 部分：龐克視覺風格 */
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0d0208; /* 極深綠黑 */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Courier New', Courier, monospace;
+            color: #00ff41;
+        }
+
+        /* 霓虹網格背景 */
+        body::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(0, 255, 65, 0.1) 1px, transparent 1px),
+                linear-gradient(90px, rgba(0, 255, 65, 0.1) 1px, transparent 1px);
+            background-size: 40px 40px;
+            z-index: -1;
+        }
+
+        h1 {
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            text-shadow: 0 0 10px #00ff41, 0 0 20px #ff003c;
+            margin-bottom: 10px;
+            animation: glitch 1s infinite;
+        }
+
+        #canvas-container {
+            position: relative;
+            border: 4px solid #ff003c;
+            box-shadow: 0 0 20px #ff003c, inset 0 0 10px #ff003c;
+            background: rgba(0, 0, 0, 0.8);
+        }
+
+        canvas {
+            display: block;
+        }
+
+        .controls {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .hint {
+            font-size: 0.8rem;
+            color: #ff003c;
+            text-transform: uppercase;
+        }
+
+        /* 故障文字動畫 */
+        @keyframes glitch {
+            0% { transform: translate(0); }
+            20% { transform: translate(-2px, 2px); }
+            40% { transform: translate(-2px, -2px); }
+            60% { transform: translate(2px, 2px); }
+            80% { transform: translate(2px, -2px); }
+            100% { transform: translate(0); }
+        }
+
+        .rage-mode {
+            animation: background-flash 0.1s infinite;
+        }
+
+        @keyframes background-flash {
+            from { background-color: #0d0208; }
+            to { background-color: #2a0000; }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Punk Stickman</h1>
+
+    <div id="canvas-container">
+        <canvas id="stickmanCanvas" width="500" height="400"></canvas>
+    </div>
+
+    <div class="controls">
+        <p class="hint">CLICK TO RAGE / 點擊進入狂暴狀態</p>
+    </div>
+
+    <script>
+        /** JavaScript 部分：火柴人動畫邏輯 **/
+        const canvas = document.getElementById('stickmanCanvas');
+        const ctx = canvas.getContext('2d');
+        let isRage = false;
+        let frame = 0;
+
+        // 監聽點擊事件
+        canvas.addEventListener('mousedown', () => {
+            isRage = true;
+            document.body.classList.add('rage-mode');
+        });
+        window.addEventListener('mouseup', () => {
+            isRage = false;
+            document.body.classList.remove('rage-mode');
+        });
+
+        function drawStickman(x, y, color, speed) {
+            const time = Date.now() * 0.005 * speed;
+            
+            // 計算肢體晃動
+            const headBob = Math.sin(time) * 5;
+            const armSwing = Math.sin(time) * 40;
+            const legSwing = Math.cos(time) * 30;
+
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 6;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = color;
+
+            // 1. 畫龐克頭 (Mohawk)
+            ctx.beginPath();
+            ctx.strokeStyle = '#ff003c';
+            for(let i=0; i<5; i++) {
+                ctx.moveTo(x - 10 + (i*5), y - 45 + headBob);
+                ctx.lineTo(x - 10 + (i*5), y - 65 + headBob);
+            }
+            ctx.stroke();
+
+            // 2. 畫頭部
+            ctx.beginPath();
+            ctx.strokeStyle = color;
+            ctx.arc(x, y - 40 + headBob, 15, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // 3. 畫身體 (脊椎)
+            ctx.beginPath();
+            ctx.moveTo(x, y - 25 + headBob);
+            ctx.lineTo(x, y + 40);
+            ctx.stroke();
+
+            // 4. 畫手臂 (左 & 右)
+            // 左手
+            ctx.beginPath();
+            ctx.moveTo(x, y - 10 + headBob);
+            ctx.lineTo(x - 30, y + headBob + armSwing);
+            ctx.stroke();
+            // 右手
+            ctx.beginPath();
+            ctx.moveTo(x, y - 10 + headBob);
+            ctx.lineTo(x + 30, y + headBob - armSwing);
+            ctx.stroke();
+
+            // 5. 畫腿部 (左 & 右)
+            // 左腳
+            ctx.beginPath();
+            ctx.moveTo(x, y + 40);
+            ctx.lineTo(x - 20 + legSwing, y + 90);
+            ctx.stroke();
+            // 右腳
+            ctx.beginPath();
+            ctx.moveTo(x, y + 40);
+            ctx.lineTo(x + 20 - legSwing, y + 90);
+            ctx.stroke();
+
+            // 加上一些龐克裝飾 (釘子手環感)
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(x - 5, y + 10, 10, 5);
+        }
+
+        function animate() {
+            // 清除畫布，帶有一點拖影效果
+            ctx.fillStyle = isRage ? 'rgba(40, 0, 0, 0.3)' : 'rgba(13, 2, 8, 0.3)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            
+            // 隨機抖動 (龐克不穩定感)
+            const shakeX = isRage ? (Math.random() - 0.5) * 15 : 0;
+            const shakeY = isRage ? (Math.random() - 0.5) * 15 : 0;
+
+            const stickColor = isRage ? '#ff003c' : '#00ff41';
+            const moveSpeed = isRage ? 3 : 1;
+
+            drawStickman(centerX + shakeX, centerY + shakeY, stickColor, moveSpeed);
+
+            // 狂暴模式下的隨機線條 (Glitch lines)
+            if (isRage && Math.random() > 0.7) {
+                ctx.strokeStyle = '#00f2ff';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                let ry = Math.random() * canvas.height;
+                ctx.moveTo(0, ry);
+                ctx.lineTo(canvas.width, ry);
+                ctx.stroke();
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+</body>
+</html>
