@@ -2,215 +2,256 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Neon Punk Stickman</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Punk Runner</title>
     <style>
-        /* CSS 部分：龐克視覺風格 */
+        /* CSS：手機版優化與龐克風格 */
+        * {
+            -webkit-tap-highlight-color: transparent; /* 移除手機點擊高亮 */
+            touch-action: manipulation; /* 優化觸控延遲 */
+            user-select: none;
+        }
+
         body {
             margin: 0;
             padding: 0;
-            background-color: #0d0208; /* 極深綠黑 */
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
+            background-color: #050505;
             overflow: hidden;
-            font-family: 'Courier New', Courier, monospace;
-            color: #00ff41;
+            font-family: 'Arial Black', sans-serif;
+            color: #0ff;
+            height: 100vh;
         }
 
-        /* 霓虹網格背景 */
-        body::before {
-            content: "";
+        #game-ui {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-image: 
-                linear-gradient(rgba(0, 255, 65, 0.1) 1px, transparent 1px),
-                linear-gradient(90px, rgba(0, 255, 65, 0.1) 1px, transparent 1px);
-            background-size: 40px 40px;
-            z-index: -1;
-        }
-
-        h1 {
-            text-transform: uppercase;
-            letter-spacing: 5px;
-            text-shadow: 0 0 10px #00ff41, 0 0 20px #ff003c;
-            margin-bottom: 10px;
-            animation: glitch 1s infinite;
-        }
-
-        #canvas-container {
-            position: relative;
-            border: 4px solid #ff003c;
-            box-shadow: 0 0 20px #ff003c, inset 0 0 10px #ff003c;
-            background: rgba(0, 0, 0, 0.8);
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            pointer-events: none;
+            text-shadow: 0 0 10px #0ff;
         }
 
         canvas {
             display: block;
+            background: linear-gradient(to bottom, #111, #000);
         }
 
-        .controls {
-            margin-top: 20px;
+        /* 遊戲結束提示 */
+        #overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
             text-align: center;
+            display: none;
+            background: rgba(255, 0, 60, 0.2);
+            padding: 20px;
+            border: 2px solid #ff003c;
+            box-shadow: 0 0 20px #ff003c;
+            backdrop-filter: blur(5px);
         }
 
-        .hint {
-            font-size: 0.8rem;
-            color: #ff003c;
+        button {
+            background: #ff003c;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1.2rem;
+            margin-top: 10px;
             text-transform: uppercase;
-        }
-
-        /* 故障文字動畫 */
-        @keyframes glitch {
-            0% { transform: translate(0); }
-            20% { transform: translate(-2px, 2px); }
-            40% { transform: translate(-2px, -2px); }
-            60% { transform: translate(2px, 2px); }
-            80% { transform: translate(2px, -2px); }
-            100% { transform: translate(0); }
-        }
-
-        .rage-mode {
-            animation: background-flash 0.1s infinite;
-        }
-
-        @keyframes background-flash {
-            from { background-color: #0d0208; }
-            to { background-color: #2a0000; }
+            box-shadow: 0 0 10px #ff003c;
         }
     </style>
 </head>
 <body>
 
-    <h1>Punk Stickman</h1>
-
-    <div id="canvas-container">
-        <canvas id="stickmanCanvas" width="500" height="400"></canvas>
+    <div id="game-ui">
+        <div>SCORE: <span id="scoreText">0</span></div>
     </div>
 
-    <div class="controls">
-        <p class="hint">CLICK TO RAGE / 點擊進入狂暴狀態</p>
+    <div id="overlay">
+        <h2 style="color: #ff003c; margin: 0;">SYSTEM CRASHED</h2>
+        <p>REBOOT REQUIRED</p>
+        <button onclick="resetGame()">RESTART</button>
     </div>
+
+    <canvas id="gameCanvas"></canvas>
 
     <script>
-        /** JavaScript 部分：火柴人動畫邏輯 **/
-        const canvas = document.getElementById('stickmanCanvas');
+        const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        let isRage = false;
-        let frame = 0;
+        const scoreElement = document.getElementById('scoreText');
+        const overlay = document.getElementById('overlay');
 
-        // 監聽點擊事件
-        canvas.addEventListener('mousedown', () => {
-            isRage = true;
-            document.body.classList.add('rage-mode');
-        });
-        window.addEventListener('mouseup', () => {
-            isRage = false;
-            document.body.classList.remove('rage-mode');
-        });
+        // 自動適應手機螢幕大小
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
 
-        function drawStickman(x, y, color, speed) {
-            const time = Date.now() * 0.005 * speed;
-            
-            // 計算肢體晃動
-            const headBob = Math.sin(time) * 5;
-            const armSwing = Math.sin(time) * 40;
-            const legSwing = Math.cos(time) * 30;
+        // 遊戲變數
+        let score = 0;
+        let isGameOver = false;
+        const gravity = 0.6;
+        
+        // 火柴人物件
+        const player = {
+            x: 50,
+            y: canvas.height / 2,
+            width: 30,
+            height: 60,
+            vy: 0,
+            jumpPower: -10,
+            color: '#0ff',
+            draw() {
+                const headBob = Math.sin(Date.now() * 0.01) * 2;
+                ctx.lineWidth = 4;
+                ctx.strokeStyle = this.color;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = this.color;
 
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 6;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.shadowBlur = 15;
-            ctx.shadowColor = color;
+                // 龐克 Mohawk
+                ctx.beginPath();
+                ctx.strokeStyle = '#ff003c';
+                for(let i=0; i<3; i++) {
+                    ctx.moveTo(this.x + 10 + (i*5), this.y - 15 + headBob);
+                    ctx.lineTo(this.x + 10 + (i*5), this.y - 30 + headBob);
+                }
+                ctx.stroke();
 
-            // 1. 畫龐克頭 (Mohawk)
-            ctx.beginPath();
-            ctx.strokeStyle = '#ff003c';
-            for(let i=0; i<5; i++) {
-                ctx.moveTo(x - 10 + (i*5), y - 45 + headBob);
-                ctx.lineTo(x - 10 + (i*5), y - 65 + headBob);
+                // 身體結構
+                ctx.strokeStyle = this.color;
+                ctx.beginPath();
+                // 頭
+                ctx.arc(this.x + 15, this.y - 5 + headBob, 10, 0, Math.PI * 2);
+                // 身體
+                ctx.moveTo(this.x + 15, this.y + 5 + headBob);
+                ctx.lineTo(this.x + 15, this.y + 35);
+                // 腿 (動態)
+                let legMove = Math.sin(Date.now() * 0.01) * 10;
+                ctx.moveTo(this.x + 15, this.y + 35);
+                ctx.lineTo(this.x + 5 - legMove, this.y + 60);
+                ctx.moveTo(this.x + 15, this.y + 35);
+                ctx.lineTo(this.x + 25 + legMove, this.y + 60);
+                ctx.stroke();
+            },
+            update() {
+                this.vy += gravity;
+                this.y += this.vy;
+
+                // 邊界判定
+                if (this.y + 60 > canvas.height) {
+                    this.y = canvas.height - 60;
+                    this.vy = 0;
+                }
+                if (this.y < 0) {
+                    this.y = 0;
+                    this.vy = 0;
+                }
+            },
+            jump() {
+                this.vy = this.jumpPower;
             }
-            ctx.stroke();
+        };
 
-            // 2. 畫頭部
-            ctx.beginPath();
-            ctx.strokeStyle = color;
-            ctx.arc(x, y - 40 + headBob, 15, 0, Math.PI * 2);
-            ctx.stroke();
+        // 障礙物陣列
+        let obstacles = [];
+        class Obstacle {
+            constructor() {
+                this.width = 40;
+                this.height = 50 + Math.random() * 150;
+                this.x = canvas.width;
+                this.y = Math.random() > 0.5 ? 0 : canvas.height - this.height;
+                this.speed = 5 + (score / 5);
+                this.color = '#ff003c';
+            }
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = this.color;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                
+                // 裝飾線條
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(this.x + 5, this.y + 5, this.width - 10, this.height - 10);
+            }
+            update() {
+                this.x -= this.speed;
+            }
+        }
 
-            // 3. 畫身體 (脊椎)
-            ctx.beginPath();
-            ctx.moveTo(x, y - 25 + headBob);
-            ctx.lineTo(x, y + 40);
-            ctx.stroke();
+        // 手機觸控監聽
+        window.addEventListener('touchstart', (e) => {
+            if (isGameOver) return;
+            player.jump();
+            // 防止螢幕捲動
+            e.preventDefault();
+        }, { passive: false });
 
-            // 4. 畫手臂 (左 & 右)
-            // 左手
-            ctx.beginPath();
-            ctx.moveTo(x, y - 10 + headBob);
-            ctx.lineTo(x - 30, y + headBob + armSwing);
-            ctx.stroke();
-            // 右手
-            ctx.beginPath();
-            ctx.moveTo(x, y - 10 + headBob);
-            ctx.lineTo(x + 30, y + headBob - armSwing);
-            ctx.stroke();
+        function spawnObstacle() {
+            if (Math.random() < 0.02) {
+                obstacles.push(new Obstacle());
+            }
+        }
 
-            // 5. 畫腿部 (左 & 右)
-            // 左腳
-            ctx.beginPath();
-            ctx.moveTo(x, y + 40);
-            ctx.lineTo(x - 20 + legSwing, y + 90);
-            ctx.stroke();
-            // 右腳
-            ctx.beginPath();
-            ctx.moveTo(x, y + 40);
-            ctx.lineTo(x + 20 - legSwing, y + 90);
-            ctx.stroke();
+        function checkCollision(p, o) {
+            return (p.x < o.x + o.width &&
+                    p.x + p.width > o.x &&
+                    p.y < o.y + o.height &&
+                    p.y + p.height > o.y);
+        }
 
-            // 加上一些龐克裝飾 (釘子手環感)
-            ctx.shadowBlur = 0;
-            ctx.fillStyle = '#fff';
-            ctx.fillRect(x - 5, y + 10, 10, 5);
+        function resetGame() {
+            score = 0;
+            scoreElement.innerText = score;
+            obstacles = [];
+            player.y = canvas.height / 2;
+            isGameOver = false;
+            overlay.style.display = 'none';
+            animate();
         }
 
         function animate() {
-            // 清除畫布，帶有一點拖影效果
-            ctx.fillStyle = isRage ? 'rgba(40, 0, 0, 0.3)' : 'rgba(13, 2, 8, 0.3)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            if (isGameOver) return;
 
-            const centerX = canvas.width / 2;
-            const centerY = canvas.height / 2;
-            
-            // 隨機抖動 (龐克不穩定感)
-            const shakeX = isRage ? (Math.random() - 0.5) * 15 : 0;
-            const shakeY = isRage ? (Math.random() - 0.5) * 15 : 0;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            const stickColor = isRage ? '#ff003c' : '#00ff41';
-            const moveSpeed = isRage ? 3 : 1;
-
-            drawStickman(centerX + shakeX, centerY + shakeY, stickColor, moveSpeed);
-
-            // 狂暴模式下的隨機線條 (Glitch lines)
-            if (isRage && Math.random() > 0.7) {
-                ctx.strokeStyle = '#00f2ff';
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                let ry = Math.random() * canvas.height;
-                ctx.moveTo(0, ry);
-                ctx.lineTo(canvas.width, ry);
-                ctx.stroke();
+            // 背景掃描線效果
+            ctx.fillStyle = 'rgba(0, 255, 255, 0.03)';
+            for (let i = 0; i < canvas.height; i += 4) {
+                ctx.fillRect(0, i, canvas.width, 1);
             }
+
+            player.update();
+            player.draw();
+
+            spawnObstacle();
+
+            obstacles.forEach((obs, index) => {
+                obs.update();
+                obs.draw();
+
+                // 碰撞檢測
+                if (checkCollision(player, obs)) {
+                    isGameOver = true;
+                    overlay.style.display = 'block';
+                }
+
+                // 超出畫面移除並加分
+                if (obs.x + obs.width < 0) {
+                    obstacles.splice(index, 1);
+                    score++;
+                    scoreElement.innerText = score;
+                }
+            });
 
             requestAnimationFrame(animate);
         }
 
+        // 開始遊戲
         animate();
     </script>
 </body>
